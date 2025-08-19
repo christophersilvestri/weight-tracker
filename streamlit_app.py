@@ -212,9 +212,6 @@ def save_user_profile(profile):
 if 'page' not in st.session_state:
     st.session_state.page = 'Dashboard'
 
-# Global variables
-global weight_data, user_profile
-
 # Load data
 weight_data = load_data()
 user_profile = load_user_profile()
@@ -332,8 +329,6 @@ if page == "Dashboard":
     )
 
 elif page == "Add Weight":
-    global weight_data
-    
     st.markdown("""
     <div class="main-header">
         <h1>Add Weight Entry</h1>
@@ -346,10 +341,24 @@ elif page == "Add Weight":
     <div class="csv-import-section">
         <h2 style="margin: 0 0 1rem 0; font-family: 'Inter', sans-serif; font-weight: 700;">📁 Import CSV Data</h2>
         <p style="margin: 0; font-family: 'Inter', sans-serif; font-weight: 400; opacity: 0.9;">
-            Upload a CSV file with your weight data (columns: date, weight, notes, goal)
+            Upload a CSV file with your weight data
         </p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Show expected CSV format
+    with st.expander("📋 **Expected CSV Format**"):
+        st.markdown("""
+        Your CSV should have these columns (column names are flexible):
+        
+        | **Required** | **Optional** | **Example** |
+        |--------------|--------------|-------------|
+        | `date` (or `Date`, `Date_Time`) | `notes` (or `Notes`, `Comments`) | `2025-08-19, 85.5, "Feeling great"` |
+        | `weight` (or `Weight`, `Weight_kg`, `Weight_lbs`) | `goal` (or `Goal`, `Fitness_Goal`) | `2025-08-20, 85.3, "On track", "maintenance"` |
+        
+        **Date formats:** YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, etc.
+        **Weight formats:** Any number (kg or lbs)
+        """)
     
     uploaded_file = st.file_uploader(
         "Choose a CSV file",
@@ -363,9 +372,36 @@ elif page == "Add Weight":
             csv_content = uploaded_file.read().decode('utf-8')
             df_upload = pd.read_csv(io.StringIO(csv_content))
             
-            # Validate columns
-            required_columns = ['date', 'weight']
-            if all(col in df_upload.columns for col in required_columns):
+            # Show what columns we found
+            st.info(f"📋 **CSV Columns Found:** {list(df_upload.columns)}")
+            
+            # Show first few rows for debugging
+            st.markdown("**📊 First few rows of your CSV:**")
+            st.dataframe(df_upload.head(3), use_container_width=True)
+            
+            # Try to map common column variations
+            column_mapping = {}
+            date_col = None
+            weight_col = None
+            
+            # Look for date columns (case insensitive)
+            for col in df_upload.columns:
+                col_lower = col.lower()
+                if 'date' in col_lower or 'time' in col_lower:
+                    date_col = col
+                    column_mapping['date'] = col
+                elif 'weight' in col_lower or 'kg' in col_lower or 'lbs' in col_lower:
+                    weight_col = col
+                    column_mapping['weight'] = col
+            
+            # Validate we have the essential columns
+            if date_col and weight_col:
+                # Rename columns to standard format
+                df_upload = df_upload.rename(columns={
+                    date_col: 'date',
+                    weight_col: 'weight'
+                })
+                
                 # Convert date column
                 df_upload['date'] = pd.to_datetime(df_upload['date'])
                 
@@ -383,7 +419,6 @@ elif page == "Add Weight":
                 # Confirm import
                 if st.button("Import Data", key="import_btn"):
                     # Append to existing data
-                    global weight_data
                     weight_data = pd.concat([weight_data, df_upload], ignore_index=True)
                     weight_data = weight_data.drop_duplicates(subset=['date']).sort_values('date')
                     save_data(weight_data)
@@ -391,7 +426,12 @@ elif page == "Add Weight":
                     st.rerun()
                     
             else:
-                st.error("❌ CSV must contain 'date' and 'weight' columns")
+                st.error(f"❌ **CSV Import Failed**")
+                st.error(f"**Required columns not found:**")
+                st.error(f"• Date column (found: {date_col if date_col else 'None'})")
+                st.error(f"• Weight column (found: {weight_col if weight_col else 'None'})")
+                st.error(f"**Your CSV has:** {list(df_upload.columns)}")
+                st.error(f"**Tip:** Make sure your CSV has columns with 'date' or 'time' in the name, and 'weight', 'kg', or 'lbs' in the name.")
                 
         except Exception as e:
             st.error(f"❌ Error reading CSV: {str(e)}")
