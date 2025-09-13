@@ -453,32 +453,48 @@ if st.session_state.username:
         """, unsafe_allow_html=True)
         
         st.markdown("### Navigation")
+
+        # Get current page with proper default
+        if 'page' not in st.session_state:
+            st.session_state.page = 'Dashboard'
+
+        current_page = st.session_state.page
+        page_index = ['Dashboard', 'Add Weight', 'Analytics', 'Profile'].index(current_page) if current_page in ['Dashboard', 'Add Weight', 'Analytics', 'Profile'] else 0
+
         page = st.selectbox(
             "Choose a page",
             ['Dashboard', 'Add Weight', 'Analytics', 'Profile'],
+            index=page_index,
             key='page_selector'
         )
-        # Update session state when page changes
-        if 'page' not in st.session_state or page != st.session_state.page:
+
+        # Update session state when selectbox changes
+        if page != st.session_state.page:
             st.session_state.page = page
-        
-        st.markdown("### Your Profile")
-        st.markdown(f"**Name:** {user_profile['name']}")
-        st.markdown(f"**Goal:** {user_profile['goal'].title()}")
-        st.markdown(f"**Target:** {user_profile['target_weight']:.1f} kg")
-        
-        # Profile click to access profile page
-        if st.button("Edit Profile", key="edit_profile_btn"):
-            st.session_state.page = 'Profile'
             st.rerun()
         
         st.markdown("---")
-        
-        # Logout button
-        if st.button("🚪 Logout", key="sidebar_logout_btn", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.username = None
-            st.rerun()
+        st.markdown("### Your Profile")
+
+        # Clean profile info display
+        profile_info = f"""
+        **👤 {user_profile['name']}**
+        🎯 Goal: {user_profile['goal'].replace('_', ' ').title()}
+        ⚖️ Target: {user_profile['target_weight']:.1f} kg
+        """
+        st.markdown(profile_info)
+
+        # Profile and logout buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✏️ Edit", key="edit_profile_btn", use_container_width=True):
+                st.session_state.page = 'Profile'
+                st.rerun()
+        with col2:
+            if st.button("🚪 Logout", key="sidebar_logout_btn", use_container_width=True):
+                st.session_state.authenticated = False
+                st.session_state.username = None
+                st.rerun()
     
     # Main content (outside sidebar)
     if st.session_state.page == "Dashboard":
@@ -526,8 +542,9 @@ if st.session_state.username:
             </div>
             """, unsafe_allow_html=True)
 
-            # Enhanced metrics grid
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
+            # Enhanced metrics grid (responsive layout)
+            col1, col2, col3 = st.columns(3)
+            col4, col5, col6 = st.columns(3)
 
             with col1:
                 st.markdown(f"""
@@ -582,36 +599,38 @@ if st.session_state.username:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            # Show empty state for new users
+            # Clean empty state for new users
             st.markdown("""
-            <div style="text-align: center; padding: 3rem; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); border-radius: 16px; margin: 2rem 0;">
-                <h2 style="color: #4a5568; margin-bottom: 1rem;">🎯 Welcome to Your Weight Tracker!</h2>
-                <p style="color: #718096; margin-bottom: 2rem;">You don't have any weight entries yet. Start tracking your progress!</p>
+            <div style="text-align: center; padding: 2.5rem; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); border-radius: 16px; margin: 1rem 0;">
+                <h2 style="color: #4a5568; margin-bottom: 1rem;">🎯 Welcome!</h2>
+                <p style="color: #718096;">Start tracking your weight to see beautiful analytics and insights.</p>
             </div>
             """, unsafe_allow_html=True)
 
-            # Empty state action buttons
-            col1, col2, col3 = st.columns([1, 2, 1])
+            # Cleaner action buttons with better spacing
+            st.markdown("<br>", unsafe_allow_html=True)
+            col1, col2, col3, col4, col5 = st.columns([1, 2, 0.5, 2, 1])
             with col2:
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("📝 Add Your First Entry", use_container_width=True, type="primary"):
-                        st.session_state.page = 'Add Weight'
-                        st.rerun()
-                with col_b:
-                    if st.button("📁 Import CSV Data", use_container_width=True, type="secondary"):
-                        st.session_state.page = 'Add Weight'  # Will show bulk entry section
-                        st.rerun()
+                if st.button("📝 Add First Entry", use_container_width=True, type="primary"):
+                    st.session_state.page = 'Add Weight'
+                    st.rerun()
+            with col4:
+                if st.button("📁 Import CSV", use_container_width=True, type="secondary"):
+                    st.session_state.page = 'Add Weight'
+                    st.rerun()
         
-        # Goal summary
-        st.markdown(f"""
-        <div class="goal-card">
-            <h2 style="margin: 0 0 1rem 0; font-family: 'Inter', sans-serif; font-weight: 700;">Current Goal: {user_profile['goal'].title()}</h2>
-            <p style="margin: 0; font-family: 'Inter', sans-serif; font-weight: 400; opacity: 0.9;">
-                Target Weight: {user_profile['target_weight']:.1f} kg | Current Weight: {user_profile['current_weight']:.1f} kg
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        # Cleaner goal summary (only if user has data)
+        if len(weight_data) > 0:
+            current_weight = weight_data.iloc[-1]['weight']
+            goal_name = user_profile['goal'].replace('_', ' ').title()
+            st.markdown(f"""
+            <div class="goal-card">
+                <h3 style="margin: 0 0 0.5rem 0; font-family: 'Inter', sans-serif; font-weight: 700;">🎯 {goal_name}</h3>
+                <p style="margin: 0; font-family: 'Inter', sans-serif; font-weight: 400; opacity: 0.9;">
+                    Current: {current_weight:.1f} kg → Target: {user_profile['target_weight']:.1f} kg
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
         
         # Weight trend chart and recent entries (only if data exists)
         if len(weight_data) > 0:
@@ -1096,13 +1115,7 @@ else:
     st.session_state.authenticated = False
     st.rerun()
 
-# Logout button in top right
-col1, col2 = st.columns([4, 1])
-with col2:
-    if st.button("🚪 Logout", key="top_logout_btn"):
-        st.session_state.authenticated = False
-        st.session_state.username = None
-        st.rerun()
+# No duplicate logout button needed - already in sidebar
 
 # Custom CSS for better styling
 st.markdown("""
@@ -1211,7 +1224,7 @@ st.markdown("""
         }
 
         .metric-card {
-            margin-bottom: 1rem;
+            margin-bottom: 1rem !important;
         }
 
         .metric-value {
@@ -1219,27 +1232,36 @@ st.markdown("""
         }
 
         .metric-label {
-            font-size: 0.9rem !important;
+            font-size: 0.85rem !important;
         }
 
-        /* Stack columns on mobile */
+        /* Better mobile columns */
         .stColumns > div {
-            min-width: 100% !important;
-            flex: 1 1 100% !important;
+            margin-bottom: 0.5rem !important;
         }
     }
 
     @media screen and (max-width: 480px) {
         .main-header {
-            padding: 1rem !important;
+            padding: 1.5rem !important;
         }
 
         .main-header h1 {
-            font-size: 1.5rem !important;
+            font-size: 1.8rem !important;
         }
 
         .metric-value {
-            font-size: 1.5rem !important;
+            font-size: 1.4rem !important;
+        }
+
+        .metric-label {
+            font-size: 0.8rem !important;
+        }
+
+        /* Stack metric cards vertically on very small screens */
+        .metric-card {
+            margin-bottom: 0.75rem !important;
+            padding: 1rem !important;
         }
     }
 
