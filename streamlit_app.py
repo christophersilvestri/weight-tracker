@@ -270,6 +270,12 @@ def init_auth():
 # Initialize authentication
 init_auth()
 
+# Quick Access Option
+if st.sidebar.button("🚀 Quick Access (Bypass Login)", use_container_width=True):
+    st.session_state.authenticated = True
+    st.session_state.username = "demo_user"
+    st.rerun()
+
 # Login page
 if not st.session_state.authenticated:
     st.markdown("""
@@ -409,10 +415,21 @@ if not st.session_state.authenticated:
                     st.session_state.show_signup = False
                     st.rerun()
             
+            # Quick access for personal use
+            st.markdown("---")
+            st.markdown("### 🚀 Quick Access")
+            if st.button("Skip Login (Personal Use)", use_container_width=True, type="secondary"):
+                st.session_state.authenticated = True
+                st.session_state.username = "demo_user"
+                st.success("✅ Quick access enabled! Redirecting...")
+                st.rerun()
+
+            st.info("💡 **Personal Use Mode:** Skip login for quick access to your weight tracker")
+
             # No default users message
             if not load_users():
-                st.info("ℹ️ **No users exist yet.** Create your first account using the Sign Up button above!")
-    
+                st.info("ℹ️ **Multi-User Setup:** Create your first account using the Sign Up button above for secure access!")
+
     st.stop()  # Stop execution here if not authenticated
 
 # If we get here, user is authenticated
