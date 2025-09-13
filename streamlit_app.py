@@ -489,6 +489,13 @@ if st.session_state.username:
         </div>
         """, unsafe_allow_html=True)
         
+        # Quick Add Weight button (always show)
+        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
+        with col_btn2:
+            if st.button("➕ Add Weight", use_container_width=True, type="primary"):
+                st.session_state.page = 'Add Weight'
+                st.rerun()
+
         # Key metrics
         if len(weight_data) > 0:
             # Calculate enhanced metrics
@@ -502,13 +509,6 @@ if st.session_state.username:
             # Progress to goal
             start_weight = weight_data.iloc[0]['weight'] if len(weight_data) > 0 else current_weight
             progress = calculate_progress_to_goal(current_weight, user_profile['target_weight'], start_weight)
-
-            # Quick Add Weight button
-            col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
-            with col_btn2:
-                if st.button("➕ Add Weight", use_container_width=True, type="primary"):
-                    st.session_state.page = 'Add Weight'
-                    st.rerun()
 
             # Motivational message
             motivation = get_motivational_message(progress, user_profile['goal'], weekly_change)
@@ -587,20 +587,21 @@ if st.session_state.username:
             <div style="text-align: center; padding: 3rem; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); border-radius: 16px; margin: 2rem 0;">
                 <h2 style="color: #4a5568; margin-bottom: 1rem;">🎯 Welcome to Your Weight Tracker!</h2>
                 <p style="color: #718096; margin-bottom: 2rem;">You don't have any weight entries yet. Start tracking your progress!</p>
-                <div style="display: flex; justify-content: center; gap: 1rem;">
-                    <a href="#add-weight" style="text-decoration: none;">
-                        <button style="background: linear-gradient(135deg, #38b2ac 0%, #4fd1c7 100%); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                            📝 Add Your First Entry
-                        </button>
-                    </a>
-                    <a href="#csv-import" style="text-decoration: none;">
-                        <button style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                            📁 Import CSV Data
-                        </button>
-                    </a>
-                </div>
             </div>
             """, unsafe_allow_html=True)
+
+            # Empty state action buttons
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("📝 Add Your First Entry", use_container_width=True, type="primary"):
+                        st.session_state.page = 'Add Weight'
+                        st.rerun()
+                with col_b:
+                    if st.button("📁 Import CSV Data", use_container_width=True, type="secondary"):
+                        st.session_state.page = 'Add Weight'  # Will show bulk entry section
+                        st.rerun()
         
         # Goal summary
         st.markdown(f"""
@@ -718,11 +719,12 @@ if st.session_state.username:
 
         # Bulk entry section
         st.markdown("### 📊 Bulk Data Entry")
-        with st.expander("📋 Quick Multi-Entry (Coming Soon)"):
-            st.info("💡 Feature in development: Upload CSV files or enter multiple entries at once.")
+        with st.expander("📋 CSV Import"):
+            st.info("💡 Upload a CSV file to import multiple weight entries at once.")
 
-            # CSV upload placeholder
-            uploaded_file = st.file_uploader("Upload Weight Data CSV", type="csv", disabled=True)
+            # CSV upload functionality
+            uploaded_file = st.file_uploader("Upload Weight Data CSV", type="csv")
+
             st.markdown("""
             **Expected CSV format:**
             ```
@@ -732,8 +734,64 @@ if st.session_state.username:
             ```
             """)
 
-            if st.button("📤 Export Template CSV", disabled=True):
-                pass
+            if uploaded_file is not None:
+                try:
+                    # Read CSV
+                    import_data = pd.read_csv(uploaded_file)
+
+                    # Validate columns
+                    required_cols = ['date', 'weight']
+                    missing_cols = [col for col in required_cols if col not in import_data.columns]
+
+                    if missing_cols:
+                        st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+                    else:
+                        # Preview data
+                        st.markdown("**Preview of data to import:**")
+                        st.dataframe(import_data.head(), use_container_width=True)
+
+                        if st.button("✅ Import Data", use_container_width=True):
+                            # Process and import data
+                            import_data['date'] = pd.to_datetime(import_data['date'])
+
+                            # Add missing columns with defaults
+                            if 'notes' not in import_data.columns:
+                                import_data['notes'] = ''
+                            import_data['goal'] = user_profile['goal']
+
+                            # Combine with existing data
+                            combined_data = pd.concat([weight_data, import_data], ignore_index=True)
+                            combined_data = combined_data.drop_duplicates(subset=['date']).sort_values('date')
+
+                            # Save data
+                            save_data(combined_data, st.session_state.username)
+
+                            # Update profile with latest weight
+                            if len(combined_data) > 0:
+                                user_profile['current_weight'] = float(combined_data.iloc[-1]['weight'])
+                                save_user_profile(user_profile, st.session_state.username)
+
+                            st.success(f"✅ Successfully imported {len(import_data)} entries!")
+                            st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Error reading CSV: {str(e)}")
+                    st.info("💡 Make sure your CSV has 'date' and 'weight' columns")
+
+            # Template CSV download
+            template_data = pd.DataFrame({
+                'date': ['2024-01-01', '2024-01-02', '2024-01-03'],
+                'weight': [75.5, 75.3, 75.7],
+                'notes': ['Initial weight', 'After workout', 'Good progress']
+            })
+            template_csv = template_data.to_csv(index=False)
+            st.download_button(
+                label="📤 Download Template CSV",
+                data=template_csv,
+                file_name="weight_tracker_template.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
     
     elif st.session_state.page == "Analytics":
         st.markdown("""
